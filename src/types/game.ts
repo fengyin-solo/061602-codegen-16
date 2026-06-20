@@ -8,6 +8,41 @@ export type BerryType = 'red' | 'blue' | 'golden'
 
 export type GamePhase = 'start' | 'playing' | 'breeding' | 'ended'
 
+export type CareStyle = 'gentle' | 'strict' | 'playful' | 'free' | 'attentive'
+
+export type WishEventType = 'gift' | 'challenge' | 'secret' | 'dream' | 'memory'
+
+export interface WishChoice {
+  id: string
+  text: string
+  emoji: string
+  effects: {
+    hunger?: number
+    fear?: number
+    health?: number
+    happiness?: number
+  }
+  feedback: string
+}
+
+export interface WishBottleEvent {
+  id: string
+  type: WishEventType
+  title: string
+  description: string
+  birdName?: string
+  choices: WishChoice[]
+  triggeredAt: number
+  birdId?: string
+}
+
+export interface CarePreference {
+  careStyle: CareStyle
+  favoriteActivity: string
+  wishMessage: string
+  recordedAt: number
+}
+
 export interface Bird {
   id: string
   name: string
@@ -16,6 +51,7 @@ export interface Bird {
   hunger: number
   fear: number
   health: number
+  happiness: number
   personality: Personality
   hatchDuration: number
   hatchTimeLeft: number
@@ -29,6 +65,7 @@ export interface Bird {
   justHatched?: boolean
   justGrew?: boolean
   justFed?: boolean
+  wishBond: number
 }
 
 export interface Berry {
@@ -56,6 +93,13 @@ export interface GameState {
   eventLog: { id: string; message: string; type: string; timestamp: number }[]
   score?: GameScore
   selectedBirdId?: string
+  carePreference?: CarePreference
+  wishBottleEvents: WishBottleEvent[]
+  currentWishEvent?: WishBottleEvent
+  nextWishEventAt: number
+  wishBottleLevel: number
+  totalWishChoices: number
+  wishBottleScore: number
 }
 
 export interface GameScore {
@@ -64,6 +108,10 @@ export interface GameScore {
   avgHealth: number
   breedingBonus: number
   personalityBonus: number
+  wishBottleBonus: number
+  wishBottleLevel: number
+  totalWishChoices: number
+  avgHappiness: number
   stars: number
   rank: string
 }

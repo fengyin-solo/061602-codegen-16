@@ -91,6 +91,18 @@ const handleHome = () => {
             <div class="text-white/60 text-xs mb-1">照料加成</div>
             <div class="font-bold text-2xl text-amber-400">+{{ score.personalityBonus }}</div>
           </div>
+
+          <div class="bg-white/5 rounded-2xl p-4 text-center border border-white/10">
+            <div class="text-3xl mb-2">✨</div>
+            <div class="text-white/60 text-xs mb-1">心愿瓶加成</div>
+            <div class="font-bold text-2xl text-purple-400">+{{ score.wishBottleBonus }}</div>
+          </div>
+
+          <div class="bg-white/5 rounded-2xl p-4 text-center border border-white/10">
+            <div class="text-3xl mb-2">😊</div>
+            <div class="text-white/60 text-xs mb-1">平均幸福</div>
+            <div class="font-bold text-2xl text-rose-400">{{ score.avgHappiness }}</div>
+          </div>
         </div>
 
         <div class="bg-gradient-to-r from-amber-500/10 to-rose-500/10 rounded-2xl p-5 mb-6 border border-amber-400/20">
@@ -105,6 +117,20 @@ const handleHome = () => {
               <span>💔 离世 {{ state.totalDied }} 只</span>
               <span>💝 繁殖 {{ state.breedingCount }} 窝</span>
               <span>🐦 存活 {{ state.birds.filter(b => !b.isDead).length }} 只</span>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="score.totalWishChoices > 0" class="bg-gradient-to-r from-purple-500/10 to-indigo-500/10 rounded-2xl p-5 mb-6 border border-purple-400/20">
+          <div class="text-center">
+            <div class="text-white/80 mb-3 flex items-center justify-center gap-2">
+              <span>🌟</span>
+              <span class="font-medium">心愿瓶回忆</span>
+            </div>
+            <div class="text-white/60 text-sm flex flex-wrap justify-center gap-x-6 gap-y-1">
+              <span>🏆 等级 Lv.{{ score.wishBottleLevel }}</span>
+              <span>💫 心愿 {{ score.totalWishChoices }} 个</span>
+              <span>😊 平均幸福 {{ score.avgHappiness }}</span>
             </div>
           </div>
         </div>

@@ -6,7 +6,7 @@ const props = defineProps<{
   max?: number
   label: string
   icon?: string
-  type?: 'hunger' | 'health' | 'fear' | 'stage'
+  type?: 'hunger' | 'health' | 'fear' | 'stage' | 'happiness'
 }>()
 
 const max = computed(() => props.max ?? 100)
@@ -15,6 +15,7 @@ const percent = computed(() => Math.max(0, Math.min(100, (props.value / max.valu
 const barClass = computed(() => {
   if (props.type === 'fear') return 'progress-gradient-fear'
   if (props.type === 'stage') return 'bg-gradient-to-r from-amber-400 to-orange-500'
+  if (props.type === 'happiness') return 'bg-gradient-to-r from-pink-400 via-rose-400 to-amber-400'
   if (percent.value >= 60) return 'progress-gradient-good'
   if (percent.value >= 30) return 'progress-gradient-mid'
   return 'progress-gradient-bad'

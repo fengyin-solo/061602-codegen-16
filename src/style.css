@@ -125,3 +125,12 @@ body {
 .progress-gradient-fear {
   background: linear-gradient(90deg, #8b5cf6 0%, #a78bfa 100%);
 }
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { watch, onMounted } from 'vue'
+import { watch, onMounted, ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGameState } from '@/composables/useGameState'
 import StatusBar from './StatusBar.vue'
@@ -7,6 +7,7 @@ import NestScene from './NestScene.vue'
 import WeatherOverlay from './WeatherOverlay.vue'
 import BirdCard from './BirdCard.vue'
 import EventModal from './EventModal.vue'
+import WishBottleModal from './WishBottleModal.vue'
 import { WEATHER_COLORS } from '@/utils/constants'
 
 const router = useRouter()
@@ -15,6 +16,30 @@ const {
   collectBerry, feedBird, calmBird, buryBird,
   releaseBirds, keepAndBreed, returnToStart, tryLoadGame,
 } = useGameState()
+
+const showWishBottle = ref(false)
+
+const currentWishEvent = computed(() => state.currentWishEvent)
+
+const hasNewWishEvent = ref(false)
+
+watch(
+  () => state.currentWishEvent,
+  (newEvent, oldEvent) => {
+    if (newEvent && !oldEvent) {
+      hasNewWishEvent.value = true
+    }
+  }
+)
+
+const openWishBottle = () => {
+  showWishBottle.value = true
+  hasNewWishEvent.value = false
+}
+
+const closeWishBottle = () => {
+  showWishBottle.value = false
+}
 
 onMounted(() => {
   if (state.phase === 'start') {
@@ -109,6 +134,22 @@ const handleCollect = (id: string) => {
         >
           <span>🏠</span> 返回主页
         </button>
+        <button
+          :class="[
+            'px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-1.5 relative',
+            hasNewWishEvent
+              ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white animate-pulse'
+              : 'glass text-white/80 hover:bg-white/20'
+          ]"
+          @click="openWishBottle"
+        >
+          <span>🌟</span> 心愿瓶
+          <span class="text-xs opacity-70">Lv.{{ state.wishBottleLevel }}</span>
+          <span
+            v-if="hasNewWishEvent"
+            class="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-bounce"
+          />
+        </button>
         <div class="glass rounded-xl px-4 py-2 text-white/80 text-sm flex items-center gap-2">
           <span>💚</span> 存活 {{ aliveCount }} 只
           <span class="mx-1 text-white/30">|</span>
@@ -117,6 +158,12 @@ const handleCollect = (id: string) => {
           离世 {{ state.totalDied }}
         </div>
       </div>
+
+      <WishBottleModal
+        :visible="showWishBottle"
+        :current-event="currentWishEvent"
+        @close="closeWishBottle"
+      />
     </div>
   </div>
 </template>

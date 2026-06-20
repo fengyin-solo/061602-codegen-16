@@ -96,6 +96,17 @@ const hatchProgress = computed(() => {
             icon="❤️"
             type="health"
           />
+          <AttributeBar
+            :value="bird.happiness"
+            label="幸福度"
+            icon="😊"
+            type="happiness"
+          />
+          <div class="flex items-center gap-2 text-[10px] text-white/50 pt-1">
+            <span>💝 羁绊: {{ bird.wishBond }}</span>
+            <span>·</span>
+            <span>🍽️ 喂食: {{ bird.feedingCount }}次</span>
+          </div>
         </template>
 
         <div v-if="bird.isDead" class="text-center py-4">
