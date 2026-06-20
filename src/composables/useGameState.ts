@@ -409,6 +409,16 @@ const setCarePreference = (careStyle: CareStyle, favoriteActivity: string, wishM
   state.nextWishEventAt = Date.now() + WISH_EVENT_MIN_INTERVAL
 }
 
+const weightedRandomChoice = <T extends { weight?: number }>(items: T[]): T => {
+  const totalWeight = items.reduce((sum, item) => sum + (item.weight ?? 1), 0)
+  let random = Math.random() * totalWeight
+  for (const item of items) {
+    random -= item.weight ?? 1
+    if (random <= 0) return item
+  }
+  return items[items.length - 1]
+}
+
 const getSuitableEvents = (bird: Bird) => {
   return WISH_EVENT_TEMPLATES.filter(template => {
     if (template.personalityMatch && !template.personalityMatch.includes(bird.personality)) {
@@ -417,25 +427,47 @@ const getSuitableEvents = (bird: Bird) => {
     if (template.careStyleMatch && state.carePreference && !template.careStyleMatch.includes(state.carePreference.careStyle)) {
       return false
     }
+    if (template.favoriteActivityMatch && state.carePreference) {
+      if (!template.favoriteActivityMatch.includes(state.carePreference.favoriteActivity)) {
+        return false
+      }
+    }
     return true
   })
+}
+
+const fillTemplateVars = (text: string, bird: Bird): string => {
+  let result = text
+  result = result.replace(/{birdName}/g, bird.name)
+  if (state.carePreference) {
+    result = result.replace(/{favoriteActivity}/g, state.carePreference.favoriteActivity)
+    result = result.replace(/{wishMessage}/g, state.carePreference.wishMessage)
+  } else {
+    result = result.replace(/{favoriteActivity}/g, '一起玩耍')
+    result = result.replace(/{wishMessage}/g, '希望你健康快乐')
+  }
+  return result
 }
 
 const triggerWishEvent = () => {
   const aliveBirds = state.birds.filter(b => !b.isDead && b.stage !== 'egg')
   if (aliveBirds.length === 0) return
 
-  const bird = randomChoice(aliveBirds)
+  const weightedBirds = aliveBirds.map(bird => ({
+    ...bird,
+    weight: 1 + bird.wishBond / 50,
+  }))
+  const bird = weightedRandomChoice(weightedBirds)
   const suitableEvents = getSuitableEvents(bird)
 
   if (suitableEvents.length === 0) return
 
-  const template = randomChoice(suitableEvents)
+  const template = weightedRandomChoice(suitableEvents)
   const event: WishBottleEvent = {
     id: generateId(),
     type: template.type,
     title: template.title,
-    description: template.description.replace(/{birdName}/g, bird.name),
+    description: fillTemplateVars(template.description, bird),
     birdName: bird.name,
     birdId: bird.id,
     choices: template.choices.map((choice, idx) => ({
@@ -443,7 +475,8 @@ const triggerWishEvent = () => {
       text: choice.text,
       emoji: choice.emoji,
       effects: { ...choice.effects },
-      feedback: choice.feedback.replace(/{birdName}/g, bird.name),
+      feedback: fillTemplateVars(choice.feedback, bird),
+      careStyleBonus: choice.careStyleBonus,
     })),
     triggeredAt: Date.now(),
   }
@@ -464,15 +497,38 @@ const handleWishChoice = (choiceId: string) => {
 
   const bird = state.birds.find(b => b.id === event.birdId)
   if (bird && !bird.isDead) {
-    if (choice.effects.hunger) bird.hunger = clamp(bird.hunger + choice.effects.hunger, ATTR_MIN, ATTR_MAX)
-    if (choice.effects.fear) bird.fear = clamp(bird.fear + choice.effects.fear, ATTR_MIN, ATTR_MAX)
-    if (choice.effects.health) bird.health = clamp(bird.health + choice.effects.health, ATTR_MIN, ATTR_MAX)
-    if (choice.effects.happiness) bird.happiness = clamp(bird.happiness + choice.effects.happiness, ATTR_MIN, ATTR_MAX)
+    let multiplier = 1
+    let bonusApplied: string[] = []
 
-    const bondGain = Math.max(5, Math.floor((choice.effects.happiness || 0) / 2))
-    bird.wishBond = clamp(bird.wishBond + bondGain, 0, 100)
+    if (choice.careStyleBonus && state.carePreference && choice.careStyleBonus.includes(state.carePreference.careStyle)) {
+      multiplier *= 1.5
+      bonusApplied.push(CARE_STYLE_NAMES[state.carePreference.careStyle])
+    }
 
-    const scoreGain = Math.max(5, Math.floor((choice.effects.happiness || 0) + Math.abs(choice.effects.fear || 0) / 2))
+    const bondMultiplier = 1 + bird.wishBond / 100
+    multiplier *= bondMultiplier
+
+    const applyEffect = (base?: number): number | undefined => {
+      if (base === undefined) return undefined
+      return Math.round(base * multiplier)
+    }
+
+    const hungerDelta = applyEffect(choice.effects.hunger)
+    const fearDelta = applyEffect(choice.effects.fear)
+    const healthDelta = applyEffect(choice.effects.health)
+    const happinessDelta = applyEffect(choice.effects.happiness)
+    const bondDeltaBase = choice.effects.bond ?? Math.max(5, Math.floor((choice.effects.happiness || 0) / 2))
+    const bondDelta = Math.round(bondDeltaBase * multiplier)
+
+    if (hungerDelta !== undefined) bird.hunger = clamp(bird.hunger + hungerDelta, ATTR_MIN, ATTR_MAX)
+    if (fearDelta !== undefined) bird.fear = clamp(bird.fear + fearDelta, ATTR_MIN, ATTR_MAX)
+    if (healthDelta !== undefined) bird.health = clamp(bird.health + healthDelta, ATTR_MIN, ATTR_MAX)
+    if (happinessDelta !== undefined) bird.happiness = clamp(bird.happiness + happinessDelta, ATTR_MIN, ATTR_MAX)
+    bird.wishBond = clamp(bird.wishBond + bondDelta, 0, 100)
+
+    const scoreGain = Math.max(5, Math.round(
+      ((happinessDelta || 0) + Math.abs(fearDelta || 0) / 2 + bondDelta) * multiplier
+    ))
     state.wishBottleScore += scoreGain
     state.totalWishChoices++
 
@@ -482,7 +538,24 @@ const handleWishChoice = (choiceId: string) => {
       addEventLog(`✨ 心愿瓶升级啦！当前等级：Lv.${state.wishBottleLevel}`, 'success')
     }
 
-    addEventLog(`💫 ${choice.feedback}`, 'info')
+    let bonusStr = ''
+    if (bonusApplied.length > 0) {
+      bonusStr = ` 💖 ${bonusApplied.join('+')}风格加成 x${multiplier.toFixed(1)}`
+    } else if (bondMultiplier > 1.1) {
+      bonusStr = ` 💝 羁绊加成 x${bondMultiplier.toFixed(1)}`
+    }
+
+    addEventLog(`💫 ${choice.feedback}${bonusStr}`, 'info')
+
+    if (bird.happiness >= 90) {
+      addEventLog(`😊 ${bird.name} 超级开心！对你的信任越来越深了~`, 'success')
+    }
+    if (bird.wishBond >= 80 && bird.wishBond - bondDelta < 80) {
+      addEventLog(`💖 ${bird.name} 和你的羁绊达到了新高度！`, 'success')
+    }
+    if (bird.health <= 30 && healthDelta !== undefined && healthDelta < 0) {
+      addEventLog(`⚠️ ${bird.name} 的健康状态令人担忧...`, 'warning')
+    }
   }
 
   state.currentWishEvent = undefined
@@ -556,15 +629,37 @@ const calculateScore = (): GameScore => {
     ? aliveBirds.reduce((s, b) => s + b.happiness, 0) / aliveBirds.length
     : 0
 
+  const avgBond = aliveBirds.length > 0
+    ? aliveBirds.reduce((s, b) => s + b.wishBond, 0) / aliveBirds.length
+    : 0
+
+  const maxBond = aliveBirds.length > 0
+    ? Math.max(...aliveBirds.map(b => b.wishBond))
+    : 0
+
   const breedingBonus = state.breedingCount * 20
   const personalityBonus = aliveBirds.length > 0
     ? aliveBirds.reduce((s, b) => s + (b.feedingCount > 10 ? 5 : 2), 0)
     : 0
 
-  const wishBottleBonus = state.wishBottleLevel * 5 + state.totalWishChoices * 2 + Math.round(avgHappiness * 0.2)
+  const activityMatchCount = state.wishBottleEvents.filter(e => {
+    const template = WISH_EVENT_TEMPLATES.find(t => t.title === e.title)
+    return template?.isActivityExclusive
+  }).length
+
+  const careStyleMatch = state.wishBottleEvents.reduce((count, event) => {
+    return count + event.choices.filter(c => c.careStyleBonus && state.carePreference && c.careStyleBonus.includes(state.carePreference.careStyle)).length > 0 ? 1 : 0
+  }, 0)
+
+  const levelBonus = state.wishBottleLevel * 5
+  const choicesBonus = state.totalWishChoices * 2
+  const happinessBonus = Math.round(avgHappiness * 0.3)
+  const bondBonus = Math.round(avgBond * 0.2)
+  const activityBonus = activityMatchCount * 3
+  const wishBottleBonus = levelBonus + choicesBonus + happinessBonus + bondBonus + activityBonus
 
   const totalScore = Math.round(
-    survivalRate * 40 +
+    survivalRate * 35 +
     avgHealth * 0.3 +
     breedingBonus +
     personalityBonus +
@@ -572,10 +667,19 @@ const calculateScore = (): GameScore => {
   )
 
   let stars = 1
-  if (totalScore >= 90) stars = 5
-  else if (totalScore >= 75) stars = 4
-  else if (totalScore >= 55) stars = 3
-  else if (totalScore >= 35) stars = 2
+  if (totalScore >= 95) stars = 5
+  else if (totalScore >= 80) stars = 4
+  else if (totalScore >= 60) stars = 3
+  else if (totalScore >= 40) stars = 2
+
+  let wishTitle: string | undefined
+  if (state.wishBottleLevel >= 5 && state.totalWishChoices >= 10) {
+    wishTitle = '🌟 心愿大师'
+  } else if (state.wishBottleLevel >= 3) {
+    wishTitle = '💝 心灵伙伴'
+  } else if (state.totalWishChoices >= 5) {
+    wishTitle = '✨ 细心倾听者'
+  }
 
   const rank = stars >= 5 ? '🏆 传奇养鸟人'
     : stars === 4 ? '🥇 金牌养鸟人'
@@ -593,8 +697,16 @@ const calculateScore = (): GameScore => {
     wishBottleLevel: state.wishBottleLevel,
     totalWishChoices: state.totalWishChoices,
     avgHappiness: Math.round(avgHappiness),
+    avgBond: Math.round(avgBond),
+    maxBond: Math.round(maxBond),
+    careStyleMatch,
+    activityMatchCount,
+    careStyle: state.carePreference?.careStyle,
+    favoriteActivity: state.carePreference?.favoriteActivity,
+    wishMessage: state.carePreference?.wishMessage,
     stars,
     rank,
+    wishTitle,
   }
 }
 

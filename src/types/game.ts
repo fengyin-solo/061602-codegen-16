@@ -21,8 +21,10 @@ export interface WishChoice {
     fear?: number
     health?: number
     happiness?: number
+    bond?: number
   }
   feedback: string
+  careStyleBonus?: CareStyle[]
 }
 
 export interface WishBottleEvent {
@@ -112,8 +114,16 @@ export interface GameScore {
   wishBottleLevel: number
   totalWishChoices: number
   avgHappiness: number
+  avgBond: number
+  maxBond: number
+  careStyleMatch: number
+  activityMatchCount: number
+  careStyle?: CareStyle
+  favoriteActivity?: string
+  wishMessage?: string
   stars: number
   rank: string
+  wishTitle?: string
 }
 
 export interface WeatherEffect {
